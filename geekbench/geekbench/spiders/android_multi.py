@@ -1,6 +1,5 @@
 import scrapy
 
-
 class AndroidMultiSpider(scrapy.Spider):
     name = "android_multi"
     allowed_domains = ["browser.geekbench.com"]
@@ -9,30 +8,32 @@ class AndroidMultiSpider(scrapy.Spider):
     ]
 
     def parse(self, response):
+        # CSS SELECTOR STRATEGY:
+        # 1. Find the div with id="multi-core" (specific to the tab you want)
+        # 2. Select the 'table' inside it
+        table = response.css("div#multi-core table")
 
-        # Select the exact table using your XPath
-        table = response.xpath("/html/body/div/div/div[1]/div[2]/div/div[2]/div/table")
-
-        # Rows inside table
-        rows = table.xpath(".//tr")
+        # Select all rows (tr) inside that table
+        rows = table.css("tr")
 
         rank = 1
         for row in rows:
+            # Device name: 
+            # Looks for <td class="name"> -> <a> -> text
+            device = row.css("td.name a::text").get()
 
-            # Device name
-            device = row.xpath(".//td[@class='name']/a/text()").get()
+            # CPU model:
+            # Looks for <td class="name"> -> <div class="description"> -> text
+            cpu = row.css("td.name div.description::text").get()
 
-            # CPU model (in <div class='description'>)
-            cpu = row.xpath(".//td[@class='name']/div[@class='description']/text()").get()
-
-            # Multi-core score (in <td class='score'>)
-            score = row.xpath(".//td[@class='score']/text()").get()
+            # Multi-core score:
+            # Looks for <td class="score"> -> text
+            score = row.css("td.score::text").get()
 
             # Skip header/empty rows
             if not device or not score:
                 continue
 
-            # DICTIONARY OUTPUT
             yield {
                 "Rank": rank,
                 "Device": device.strip(),
@@ -43,7 +44,8 @@ class AndroidMultiSpider(scrapy.Spider):
             rank += 1
 
         # Follow pagination
-        next_page = response.xpath("//a[@rel='next']/@href").get()
+        # specific attribute selection uses ::attr(attributename)
+        next_page = response.css("a[rel='next']::attr(href)").get()
 
         if next_page:
             yield response.follow(next_page, callback=self.parse)
